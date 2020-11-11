@@ -1,14 +1,20 @@
 import matplotlib.pyplot as plt
+from numpy.lib.function_base import append
 import pandas as pd
 import csv
+from operator import attrgetter
 
 #membacaFile
 dfile = pd.read_excel("Mahasiswa.xls");
 class Mahasiswa:
-    def __init__(self,id,penghasilan,pengeluaran):
+    def __init__(self,id,penghasilan,pengeluaran,score):
         self.id = id
         self.penghasilan = penghasilan
         self.pengeluaran = pengeluaran
+        self.score = score
+    
+    def __repr__(self):
+        return repr((self.id,self.penghasilan,self.pengeluaran,self.score))
 
 #Design Membership Function
 def calc_high(value,x,y):
@@ -120,14 +126,14 @@ axs[1].plot(x2_out,y2_out,label='Pengeluaran Rendah');
 axs[1].plot(x3_out,y3_out,label='Pengeluaran Rata-Rata');
 axs[1].legend()
 
-#FuzzyRules For Determine Mahasiswa Accepted , Rejected or Considered based on input Penghasilan and Pengeluaran
-hasil = [];
+#INFERENCE
 
+#FuzzyRules For Determine Mahasiswa Accepted , Rejected or Considered based on input Penghasilan and Pengeluaran
 def Fuzzy_Rules(cond_pengeluaran,cond_penghasilan,val_inc,val_out):
     acc,cons,rej = [], [], [];
     if(cond_penghasilan[i][0] == 'Diatas' and cond_pengeluaran[i][0] == 'Tinggi'):
         value = min(val_inc[i][0],val_out[i][0]);
-        cons.append(['Considered',value]);
+        rej.append(['Reject',value]);
     if(cond_penghasilan[i][0] == 'Diatas' and cond_pengeluaran[i][1] == 'Rata-Rata'):
         value = min(val_inc[i][0],val_out[i][1]);
         rej.append(['Reject',value]);
@@ -136,7 +142,7 @@ def Fuzzy_Rules(cond_pengeluaran,cond_penghasilan,val_inc,val_out):
         rej.append(['Reject',value]);
     if(cond_penghasilan[i][1] == 'Tengah' and cond_pengeluaran[i][0] == 'Tinggi'):
         value = min(val_inc[i][1],val_out[i][0]);
-        acc.append(['Accept',value]);
+        rej.append(['Reject',value]);
     if(cond_penghasilan[i][1] == 'Tengah' and cond_pengeluaran[i][1] == 'Rata-Rata'):
         value = min(val_inc[i][1],val_out[i][1]);
         cons.append(['Considered',value]);
@@ -151,10 +157,27 @@ def Fuzzy_Rules(cond_pengeluaran,cond_penghasilan,val_inc,val_out):
         acc.append(['Accept',value]);
     if(cond_penghasilan[i][2] == 'Bawah' and cond_pengeluaran[i][2] == 'Rendah'):
         value = min(val_inc[i][2],val_out[i][2]);
-        cons.append(['Considered',value]);
+        acc.append(['Accept',value]);
     
     return acc,cons,rej
 
+#Disjunction rule to get the maximum value for each fuzzy output
+def Disjunction_Rule(Score):
+    value = []
+    value.append(max(Score[0]));
+    value.append(max(Score[1]));
+    value.append(max(Score[2]));
+    return value
+
+#Defuzzification - Sugeno Style 
+def defuzzification(Value):
+    batas = [50,75,100]
+    hasila = Value[0][1]*batas[2]
+    hasilb = Value[1][1]*batas[1]
+    hasilc = Value[2][1]*batas[0]
+    pembagi = Value[0][1]+Value[1][1]+Value[2][1]
+    hasil = ((hasila+hasilb+hasilc)/pembagi)
+    return hasil 
 
 #mainprogram
 mhs = []
@@ -162,11 +185,23 @@ income = [];
 out = []
 con_pengeluaran = []
 con_penghasilan = []
+hasil = []
 for i in range(len(dfile)):
-    mhs.append(Mahasiswa(dfile["Id"][i],dfile["Penghasilan"][i],dfile["Pengeluaran"][i]));
+    mhs.append(Mahasiswa(dfile["Id"][i],dfile["Penghasilan"][i],dfile["Pengeluaran"][i],""));
     con_pengeluaran.append(['Tinggi','Rata-Rata','Rendah'])
     con_penghasilan.append(['Diatas','Tengah','Bawah'])
     income.append([Penghasilanfunc_Up(mhs[i].penghasilan),Penghasilanfunc_Med(mhs[i].penghasilan),Penghasilanfunc_Bot(mhs[i].penghasilan)]);
     out.append([Pengeluaranfunc_High(mhs[i].pengeluaran),Pengeluaranfunc_Avg(mhs[i].pengeluaran),Pengeluaranfunc_Low(mhs[i].pengeluaran)]);
-    print(mhs[i].id,mhs[i].penghasilan,mhs[i].pengeluaran);
-    print(Fuzzy_Rules(con_pengeluaran,con_penghasilan,income,out))
+    Score = Fuzzy_Rules(con_pengeluaran,con_penghasilan,income,out)
+    Disj = Disjunction_Rule(Score);
+    hasil = round(defuzzification(Disj),2);
+    mhs[i].score = hasil
+    #print(mhs[i].id,mhs[i].penghasilan,mhs[i].pengeluaran,mhs[i].score);
+  
+sorted_mhs = sorted(mhs,key=attrgetter('score'),reverse=True)
+penerima = []
+for i in range(20):
+    penerima.append([sorted_mhs[i].id,sorted_mhs[i].score])
+print("Penerima Bantuan Mahasiswa dengan ID : ")
+for i in range(len(penerima)):
+    print(penerima[i])
